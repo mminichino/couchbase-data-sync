@@ -5,6 +5,9 @@ image:
   tag: "0.1.0"
   pullPolicy: IfNotPresent
 
+# Sample connection/mapping kept in ConfigMap for `syncmgr deploy` from the pod.
+# The supervisor starts idle; deploy with:
+#   kubectl exec -it <pod> -- syncmgr deploy -c /config/connection.yaml -m /config/mapping.yaml
 pipeline:
   name: orders-postgres-to-cb
 
@@ -84,7 +87,7 @@ persistence:
 
 service:
   type: ClusterIP
-  metricsPort: 9404
+  controlPort: 9405
 
 serviceMonitor:
   enabled: false

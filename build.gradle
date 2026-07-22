@@ -40,10 +40,16 @@ ext {
 }
 
 // Convenience aliases from the root project
-tasks.register('runPipeline') {
+tasks.register('runSupervisor') {
     group = 'application'
-    description = 'Alias for :cli:runPipeline (JVM). Pass -Pconnection= and -Pmapping='
-    dependsOn ':cli:runPipeline'
+    description = 'Alias for :cli:runSupervisor'
+    dependsOn ':cli:runSupervisor'
+}
+
+tasks.register('deployPipeline') {
+    group = 'application'
+    description = 'Alias for :cli:deployPipeline. Pass -Pconnection= and -Pmapping='
+    dependsOn ':cli:deployPipeline'
 }
 
 tasks.register('validateConfig') {

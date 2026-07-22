@@ -12,6 +12,7 @@ import picocli.CommandLine.Command;
                 ValidateCommand.class,
                 DryRunCommand.class,
                 RunCommand.class,
+                DeployCommand.class,
                 StatusCommand.class,
                 StopCommand.class,
                 CommandLine.HelpCommand.class

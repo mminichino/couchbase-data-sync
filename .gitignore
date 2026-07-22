@@ -3,9 +3,11 @@ build/
 data/offsets/*
 data/schema-history/*
 data/dlq/*
+data/config/*
 !data/offsets/.gitkeep
 !data/schema-history/.gitkeep
 !data/dlq/.gitkeep
+!data/config/.gitkeep
 *.dat
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/

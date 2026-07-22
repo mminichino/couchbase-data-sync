@@ -27,13 +27,15 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           args:
             - run
-            - -c
-            - /config/connection.yaml
-            - -m
-            - /config/mapping.yaml
+            - --bind
+            - 0.0.0.0
+            - --port
+            - {{ .Values.service.controlPort | quote }}
+            - --config-dir
+            - /data/config
           ports:
-            - name: metrics
-              containerPort: {{ .Values.service.metricsPort }}
+            - name: control
+              containerPort: {{ .Values.service.controlPort }}
               protocol: TCP
           envFrom:
             {{- if .Values.secrets.existingSecret }}
@@ -52,14 +54,14 @@ spec:
           livenessProbe:
             httpGet:
               path: /health
-              port: metrics
-            initialDelaySeconds: 60
+              port: control
+            initialDelaySeconds: 20
             periodSeconds: 30
           readinessProbe:
             httpGet:
               path: /health
-              port: metrics
-            initialDelaySeconds: 30
+              port: control
+            initialDelaySeconds: 5
             periodSeconds: 10
           resources:
             {{- toYaml .Values.resources | nindent 12 }}

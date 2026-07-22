@@ -52,7 +52,7 @@ public class SyncMetrics implements AutoCloseable {
         String path = config.getPath() == null || config.getPath().isBlank() ? "/metrics" : config.getPath();
         server = HttpServer.create(new InetSocketAddress(config.getPort()), 0);
         server.createContext(path, exchange -> {
-            byte[] body = registry.scrape().getBytes(StandardCharsets.UTF_8);
+            byte[] body = scrape().getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().add("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
             exchange.sendResponseHeaders(200, body.length);
             try (OutputStream os = exchange.getResponseBody()) {
@@ -69,6 +69,10 @@ public class SyncMetrics implements AutoCloseable {
         server.setExecutor(null);
         server.start();
         log.info("Prometheus metrics at http://0.0.0.0:{}{}", config.getPort(), path);
+    }
+
+    public String scrape() {
+        return registry.scrape();
     }
 
     public void recordEvent() {

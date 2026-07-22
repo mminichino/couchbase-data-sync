@@ -1,56 +1,39 @@
 # Architecture
 
 ```text
-source DB ──► Debezium Embedded Engine ──► TransformEngine ──► CouchbaseSink
-                      │                         │                    │
-              OffsetBackingStore          mapping.yaml          durability + DLQ
-              SchemaHistory                                     Prometheus /health
-                      ▲
-         file | kafka | couchbase
-         (+ optional HA lease)
+syncmgr run  ──► PipelineSupervisor (HTTP :9405)
+                      │
+                      │  POST /deploy  (connection + mapping YAML)
+                      ▼
+                 SyncPipeline
+                      │
+ source DB ──► Debezium Engine ──► Transform ──► CouchbaseSink
+                      │
+              file | kafka | couchbase offsets
 ```
 
-## Running (JVM preferred)
+## Supervisor lifecycle
+
+1. `syncmgr run` starts idle (health/status/metrics only).
+2. `syncmgr deploy` validates YAML, POSTs to `/deploy`, which stops any active pipeline and starts a new `SyncPipeline`.
+3. `syncmgr stop` stops the pipeline; the supervisor keeps running.
+4. Changing source connectivity requires another `deploy` (Debezium engine is rebuilt).
+
+## Running (JVM)
 
 ```bash
-./gradlew :cli:runPipeline -Pconnection=... -Pmapping=...
-# or
-./gradlew :cli:run --args='run -c ... -m ...'
+./gradlew :cli:runSupervisor
+./gradlew :cli:deployPipeline -Pconnection=... -Pmapping=...
 ```
-
-Native-image (`:cli:nativeCompile`) is optional and best suited to `validate` / `status`.
 
 ## Offset backends
 
 | Backend | Multi-replica | Notes |
 |---------|---------------|-------|
-| `file` | No | PVC per pod; simplest for single replica |
-| `kafka` | Yes (with HA) | `KafkaOffsetBackingStore` + `KafkaSchemaHistory` |
-| `couchbase` | Yes (with HA) | Custom stores in target (or dedicated) bucket |
+| `file` | No | Local/PVC |
+| `kafka` | Yes (with HA) | Shared topics |
+| `couchbase` | Yes (with HA) | Shared KV + lease |
 
-### HA leader election
+## Soft-delete / durability / XStream
 
-Set `offsets.ha.enabled: true` with `backend: kafka|couchbase`. Standbys wait on a Couchbase lease document (`cdc::lease::<pipeline>`); only the leader runs Debezium. Losing the lease stops the engine so a standby can take over from shared offsets.
-
-**Important:** Even with shared offsets, only one active engine may consume a given Postgres slot / Oracle LogMiner session / SQL Server CDC capture — HA is active/standby, not sharded parallelism.
-
-## Soft-delete semantics
-
-| `softDelete` | Debezium `op=d` |
-|--------------|-----------------|
-| `true` | Upsert with `_deleted=true`, `deletedAt=<iso8601>` |
-| `false` | Couchbase KV `remove` |
-
-## Couchbase durability
-
-`target.durability`: `none` | `majority` | `majorityAndPersistActive` | `persistToMajority`
-
-## Oracle adapters
-
-`source.connectionAdapter`: `logminer` (default) or `xstream` (requires `source.outServerName`).
-
-## Extending sources
-
-1. Implement `SourceConnectorBuilder`
-2. Register in `SourceConnectorFactory.findBuilder`
-3. Add `source.type` to `connection.schema.json`
+See README. Soft-delete uses `_deleted` + `deletedAt`. Durability via `target.durability`. Oracle `connectionAdapter: logminer|xstream`.

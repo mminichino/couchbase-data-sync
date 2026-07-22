@@ -21,29 +21,41 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
-// Preferred way to run pipelines (JVM). Native-image is optional for validate/status only.
 tasks.named('run', JavaExec) {
     group = 'application'
-    description = 'Run syncmgr via JVM (pass --args). Example: ./gradlew :cli:run --args="validate -c ... -m ... --syntax-only"'
+    description = 'Run syncmgr via JVM (pass --args). Example: ./gradlew :cli:run --args="run"'
 }
 
-tasks.register('runPipeline', JavaExec) {
+tasks.register('runSupervisor', JavaExec) {
     group = 'application'
-    description = 'Run a CDC pipeline (JVM). Requires -Pconnection=... -Pmapping=...'
+    description = 'Start the idle supervisor (JVM)'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.codelry.cdc.cli.SyncMgr'
+    workingDir = rootProject.projectDir
+    args = ['run', '--bind', '0.0.0.0', '--port', '9405', '--config-dir', 'data/config']
+}
+
+tasks.register('deployPipeline', JavaExec) {
+    group = 'application'
+    description = 'Deploy configs to a running supervisor. Requires -Pconnection= -Pmapping= [-Purl=]'
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'com.codelry.cdc.cli.SyncMgr'
     workingDir = rootProject.projectDir
     doFirst {
         if (!project.hasProperty('connection') || !project.hasProperty('mapping')) {
             throw new GradleException(
-                    'Usage: ./gradlew :cli:runPipeline -Pconnection=path/to/connection.yaml -Pmapping=path/to/mapping.yaml')
+                    'Usage: ./gradlew :cli:deployPipeline -Pconnection=... -Pmapping=... [-Purl=http://127.0.0.1:9405]')
         }
     }
-    args = [
-            'run',
+    def argsList = [
+            'deploy',
             '-c', "${project.findProperty('connection')}",
             '-m', "${project.findProperty('mapping')}"
     ]
+    if (project.hasProperty('url')) {
+        argsList.addAll(['--url', "${project.findProperty('url')}"])
+    }
+    args = argsList
 }
 
 tasks.register('validateConfig', JavaExec) {
@@ -76,8 +88,6 @@ graalvmNative {
             mainClass = 'com.codelry.cdc.cli.SyncMgr'
             buildArgs.add('--no-fallback')
             buildArgs.add('-H:+ReportExceptionStackTraces')
-            // Prefer :cli:run / :cli:runPipeline for production pipelines.
-            // Native image remains available for lightweight validate/status once metadata is complete.
         }
     }
     metadataRepository {

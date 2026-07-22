@@ -44,6 +44,7 @@ public class SyncPipeline implements AutoCloseable {
 
     private final ConnectionConfig connection;
     private final MappingConfig mapping;
+    private final boolean startMetricsHttp;
     private final Path statusFile;
     private final AtomicReference<PipelineState> state = new AtomicReference<>(PipelineState.STOPPED);
     private final AtomicBoolean stopRequested = new AtomicBoolean(false);
@@ -56,8 +57,13 @@ public class SyncPipeline implements AutoCloseable {
     private PipelineLeaderElection leaderElection;
 
     public SyncPipeline(ConnectionConfig connection, MappingConfig mapping) {
+        this(connection, mapping, true);
+    }
+
+    public SyncPipeline(ConnectionConfig connection, MappingConfig mapping, boolean startMetricsHttp) {
         this.connection = connection;
         this.mapping = mapping;
+        this.startMetricsHttp = startMetricsHttp;
         String statusDir = connection.getOffsets().getPath() != null
                 ? connection.getOffsets().getPath()
                 : "./data/offsets";
@@ -79,7 +85,9 @@ public class SyncPipeline implements AutoCloseable {
         validateHaConfig();
 
         metrics = new SyncMetrics(connection.getPipeline().getName());
-        metrics.startHttpServer(connection.getMetrics());
+        if (startMetricsHttp) {
+            metrics.startHttpServer(connection.getMetrics());
+        }
 
         // Create mapping / offset scopes+collections before HA lease or sink writes
         CouchbaseKeyspaceEnsuring.ensure(connection, mapping);
@@ -271,6 +279,14 @@ public class SyncPipeline implements AutoCloseable {
 
     public ConnectionConfig connection() {
         return connection;
+    }
+
+    public MappingConfig mapping() {
+        return mapping;
+    }
+
+    public SyncMetrics metrics() {
+        return metrics;
     }
 
     public Path statusFile() {

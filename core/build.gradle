@@ -14,7 +14,7 @@ dependencies {
 
     implementation "org.yaml:snakeyaml:${rootProject.ext.snakeyamlVersion}"
     implementation "com.networknt:json-schema-validator:${rootProject.ext.jsonSchemaVersion}"
-    implementation "com.fasterxml.jackson.core:jackson-databind:${rootProject.ext.jacksonVersion}"
+    api "com.fasterxml.jackson.core:jackson-databind:${rootProject.ext.jacksonVersion}"
     implementation "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:${rootProject.ext.jacksonVersion}"
     implementation "com.fasterxml.jackson.datatype:jackson-datatype-jsr310:${rootProject.ext.jacksonVersion}"
 

@@ -13,7 +13,7 @@ spec:
     matchLabels:
       {{- include "cdc-couchbase-sync.selectorLabels" . | nindent 6 }}
   endpoints:
-    - port: metrics
+    - port: control
       path: /metrics
       interval: {{ .Values.serviceMonitor.interval }}
 {{- end }}

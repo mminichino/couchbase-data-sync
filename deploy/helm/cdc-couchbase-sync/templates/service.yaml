@@ -9,7 +9,7 @@ spec:
   selector:
     {{- include "cdc-couchbase-sync.selectorLabels" . | nindent 4 }}
   ports:
-    - name: metrics
-      port: {{ .Values.service.metricsPort }}
-      targetPort: metrics
+    - name: control
+      port: {{ .Values.service.controlPort }}
+      targetPort: control
       protocol: TCP

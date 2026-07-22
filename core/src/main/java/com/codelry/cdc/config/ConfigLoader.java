@@ -46,18 +46,34 @@ public final class ConfigLoader {
     }
 
     public ConnectionConfig loadConnection(Path path) throws IOException {
-        Object raw = loadYamlRaw(path);
-        Object resolved = interpolator.interpolateDeep(raw);
-        JsonNode tree = jsonMapper.valueToTree(resolved);
-        validate(connectionSchema, tree, path);
-        return jsonMapper.treeToValue(tree, ConnectionConfig.class);
+        return loadConnectionYaml(Files.readString(path), path.toString());
     }
 
     public MappingConfig loadMapping(Path path) throws IOException {
-        Object raw = loadYamlRaw(path);
+        return loadMappingYaml(Files.readString(path), path.toString());
+    }
+
+    public ConnectionConfig loadConnectionYaml(String yaml) throws IOException {
+        return loadConnectionYaml(yaml, "connection.yaml");
+    }
+
+    public MappingConfig loadMappingYaml(String yaml) throws IOException {
+        return loadMappingYaml(yaml, "mapping.yaml");
+    }
+
+    public ConnectionConfig loadConnectionYaml(String yaml, String sourceName) throws IOException {
+        Object raw = loadYamlRaw(yaml);
         Object resolved = interpolator.interpolateDeep(raw);
         JsonNode tree = jsonMapper.valueToTree(resolved);
-        validate(mappingSchema, tree, path);
+        validate(connectionSchema, tree, sourceName);
+        return jsonMapper.treeToValue(tree, ConnectionConfig.class);
+    }
+
+    public MappingConfig loadMappingYaml(String yaml, String sourceName) throws IOException {
+        Object raw = loadYamlRaw(yaml);
+        Object resolved = interpolator.interpolateDeep(raw);
+        JsonNode tree = jsonMapper.valueToTree(resolved);
+        validate(mappingSchema, tree, sourceName);
         return jsonMapper.treeToValue(tree, MappingConfig.class);
     }
 
@@ -66,41 +82,55 @@ public final class ConfigLoader {
      * Secret placeholders are left as-is; schema still requires non-empty strings.
      */
     public void validateConnectionSyntax(Path path) throws IOException {
-        Object raw = loadYamlRaw(path);
+        Object raw = loadYamlRaw(Files.readString(path));
         JsonNode tree = jsonMapper.valueToTree(raw);
-        validate(connectionSchema, tree, path);
+        validate(connectionSchema, tree, path.toString());
     }
 
     public void validateMappingSyntax(Path path) throws IOException {
-        Object raw = loadYamlRaw(path);
+        Object raw = loadYamlRaw(Files.readString(path));
         JsonNode tree = jsonMapper.valueToTree(raw);
-        validate(mappingSchema, tree, path);
+        validate(mappingSchema, tree, path.toString());
+    }
+
+    public void validateConnectionSyntaxYaml(String yaml) throws IOException {
+        Object raw = loadYamlRaw(yaml);
+        JsonNode tree = jsonMapper.valueToTree(raw);
+        validate(connectionSchema, tree, "connection.yaml");
+    }
+
+    public void validateMappingSyntaxYaml(String yaml) throws IOException {
+        Object raw = loadYamlRaw(yaml);
+        JsonNode tree = jsonMapper.valueToTree(raw);
+        validate(mappingSchema, tree, "mapping.yaml");
     }
 
     public PipelineConfigBundle loadBundle(Path connectionPath, Path mappingPath) throws IOException {
         return new PipelineConfigBundle(loadConnection(connectionPath), loadMapping(mappingPath));
     }
 
-    private Object loadYamlRaw(Path path) throws IOException {
-        LoaderOptions options = new LoaderOptions();
-        options.setMaxAliasesForCollections(50);
-        Yaml yaml = new Yaml(options);
-        try (InputStream in = Files.newInputStream(path)) {
-            Object loaded = yaml.load(in);
-            if (loaded == null) {
-                throw new ConfigValidationException("Empty YAML file: " + path);
-            }
-            return loaded;
-        }
+    public PipelineConfigBundle loadBundleYaml(String connectionYaml, String mappingYaml) throws IOException {
+        return new PipelineConfigBundle(loadConnectionYaml(connectionYaml), loadMappingYaml(mappingYaml));
     }
 
-    private void validate(JsonSchema schema, JsonNode tree, Path path) {
+    private Object loadYamlRaw(String yaml) {
+        LoaderOptions options = new LoaderOptions();
+        options.setMaxAliasesForCollections(50);
+        Yaml parser = new Yaml(options);
+        Object loaded = parser.load(yaml);
+        if (loaded == null) {
+            throw new ConfigValidationException("Empty YAML");
+        }
+        return loaded;
+    }
+
+    private void validate(JsonSchema schema, JsonNode tree, String sourceName) {
         Set<ValidationMessage> errors = schema.validate(tree);
         if (!errors.isEmpty()) {
             String detail = errors.stream()
                     .map(ValidationMessage::getMessage)
                     .collect(Collectors.joining("; "));
-            throw new ConfigValidationException("Invalid config " + path + ": " + detail);
+            throw new ConfigValidationException("Invalid config " + sourceName + ": " + detail);
         }
     }
 

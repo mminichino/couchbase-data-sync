@@ -1,29 +1,40 @@
 package com.codelry.cdc.cli;
 
-import java.nio.file.Path;
-import java.util.Map;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.concurrent.Callable;
-
-import com.codelry.cdc.engine.StatusService;
 
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
-@Command(name = "status", description = "Show pipeline state, offsets, and lag hints.")
+@Command(name = "status", description = "Show supervisor / pipeline status.")
 public class StatusCommand implements Callable<Integer> {
 
-    @Option(names = {"-c", "--connection"}, required = true, description = "Path to connection.yaml")
-    Path connection;
+    @Option(names = {"--url"}, description = "Supervisor base URL (default: ${DEFAULT-VALUE})",
+            defaultValue = "http://127.0.0.1:9405")
+    String url;
 
     @Override
     public Integer call() {
         try {
-            Map<String, String> status = StatusService.status(connection);
-            status.forEach((k, v) -> System.out.println(k + "=" + v));
-            return 0;
+            HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+            HttpRequest request = HttpRequest.newBuilder(URI.create(trimSlash(url) + "/status"))
+                    .timeout(Duration.ofSeconds(15))
+                    .GET()
+                    .build();
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            System.out.println(response.body());
+            return response.statusCode() == 200 ? 0 : 1;
         } catch (Exception e) {
             System.err.println("status failed: " + e.getMessage());
             return 2;
         }
+    }
+
+    private static String trimSlash(String u) {
+        return u.endsWith("/") ? u.substring(0, u.length() - 1) : u;
     }
 }

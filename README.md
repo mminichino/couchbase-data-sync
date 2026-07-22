@@ -1,79 +1,83 @@
 # Couchbase Data Sync
 
-Focused Debezium-embedded CDC tool that syncs **Oracle**, **PostgreSQL**, and **Microsoft SQL Server** into **Couchbase**. Additional sources can be added via `SourceConnectorBuilder` adapters.
+Focused Debezium-embedded CDC tool that syncs **Oracle**, **PostgreSQL**, and **Microsoft SQL Server** into **Couchbase**.
 
 ## Modules
 
 | Module | Purpose |
 |--------|---------|
-| `core` | Config loader, connector builders, transform engine, Couchbase sink, offsets, metrics |
-| `cli` | `syncmgr` CLI (Picocli): validate, dry-run, run, status, stop |
+| `core` | Config loader, connector builders, transform, sink, supervisor |
+| `cli` | `syncmgr` CLI |
 
 ## Quick start
 
-Requires **Java 17+**. Prefer the **JVM** distribution / Gradle run tasks over GraalVM native-image for `run`.
+Requires **Java 17+**. Prefer the **JVM** distribution.
 
 ```bash
-# Build
 ./gradlew :cli:installDist
 
-# Validate (Gradle)
-./gradlew :cli:validateConfig \
-  -Pconnection=examples/postgres-to-couchbase/connection.yaml \
-  -Pmapping=examples/postgres-to-couchbase/mapping.yaml \
-  -PsyntaxOnly
+# 1) Start idle supervisor
+./cli/build/install/syncmgr/bin/syncmgr run --port 9405
 
-# Run pipeline (Gradle / JVM)
-./gradlew :cli:runPipeline \
-  -Pconnection=examples/postgres-to-couchbase/connection.yaml \
-  -Pmapping=examples/postgres-to-couchbase/mapping.yaml
-
-# Or installDist binary
-./cli/build/install/syncmgr/bin/syncmgr validate \
+# 2) Deploy a pipeline (separate terminal)
+./cli/build/install/syncmgr/bin/syncmgr deploy \
   -c examples/postgres-to-couchbase/connection.yaml \
-  -m examples/postgres-to-couchbase/mapping.yaml \
-  --syntax-only
+  -m examples/postgres-to-couchbase/mapping.yaml
+
+# Status / stop pipeline (supervisor stays up)
+./cli/build/install/syncmgr/bin/syncmgr status
+./cli/build/install/syncmgr/bin/syncmgr stop
 ```
 
-Docker Compose (Postgres + Couchbase skeleton):
+Gradle:
 
 ```bash
-docker compose up -d postgres couchbase
+./gradlew :cli:runSupervisor
+./gradlew :cli:deployPipeline -Pconnection=examples/.../connection.yaml -Pmapping=examples/.../mapping.yaml
 ```
 
-Helm:
+Docker Compose (supervisor only — point configs at existing DBs):
 
 ```bash
-helm upgrade --install cdc ./deploy/helm/cdc-couchbase-sync \
-  --set secrets.existingSecret=cdc-secrets
+docker compose up -d --build
+docker compose exec syncmgr deploy \
+  -c /config/postgres-to-couchbase/connection.yaml \
+  -m /config/postgres-to-couchbase/mapping.yaml
 ```
+
+## Supervisor API
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/health` | Liveness |
+| GET | `/status` | Supervisor + pipeline state |
+| POST | `/deploy` | Body: `{ "connectionYaml", "mappingYaml" }` — validate, start or replace |
+| POST | `/pipeline/stop` | Stop active pipeline |
+| GET | `/metrics` | Prometheus (pipeline metrics when deployed) |
 
 ## Configuration
 
-Two YAML files per pipeline instance:
+Two YAML files per pipeline (submitted via `deploy`):
 
-- **`connection.yaml`** — source/target connectivity, offsets, metrics, DLQ
-- **`mapping.yaml`** — table → collection mapping, key templates, field renames/coercions
+- **`connection.yaml`** — source/target, offsets, metrics, DLQ
+- **`mapping.yaml`** — table → collection mapping, keys, field rules
 
-Secrets must use `${env:VAR}` or `${vault:path#field}` — never literal passwords in YAML.
+Secrets: `${env:VAR}` / `${vault:path#field}`.
 
 ### Offset backends
 
 | Backend | Use when |
 |---------|----------|
-| `file` | Single replica / local PVC |
-| `kafka` | Shared offsets via Kafka topics |
-| `couchbase` | Shared offsets in Couchbase (`cdc_state` collection) |
+| `file` | Single replica |
+| `kafka` | Shared Kafka topics |
+| `couchbase` | Shared docs + optional HA lease |
 
-For multi-replica, set `offsets.ha.enabled: true` (active/standby leader election). See `examples/postgres-to-couchbase/connection-ha-couchbase.yaml`.
-
-### Durability
+### Durability & auto keyspaces
 
 ```yaml
 target:
-  durability: majority   # none | majority | majorityAndPersistActive | persistToMajority
-  kvTimeoutSeconds: 10
-  autoCreateKeyspaces: true          # create missing scopes/collections from mapping
+  durability: majority
+  autoCreateKeyspaces: true
   keyspaceReadyTimeoutSeconds: 60
 ```
 
@@ -81,51 +85,19 @@ target:
 
 ```yaml
 source:
-  type: oracle
   connectionAdapter: xstream
   outServerName: dbzxout
 ```
 
-### Key templates
-
-| Token | Meaning |
-|-------|---------|
-| `{COLUMN}` | Source column value |
-| `{pk}` | Debezium record primary key |
-| `{uuid4}` | Random UUID |
-
-### Soft delete
-
-When `softDelete: true`, deletes become upserts with `_deleted: true` and `deletedAt` (ISO-8601).
-
-## Metrics
-
-Prometheus scrape endpoint (default `:9404/metrics`) plus `/health`.
-
 ## CLI
 
 ```text
-syncmgr validate  -c connection.yaml -m mapping.yaml [--syntax-only]
-syncmgr dry-run   -c connection.yaml -m mapping.yaml
-syncmgr run       -c connection.yaml -m mapping.yaml
-syncmgr status    -c connection.yaml
-syncmgr stop      -c connection.yaml
+syncmgr run [--bind 0.0.0.0] [--port 9405] [--config-dir ./data/config]
+syncmgr deploy -c connection.yaml -m mapping.yaml [--url http://127.0.0.1:9405]
+syncmgr status [--url ...]
+syncmgr stop   [--url ...]
+syncmgr validate -c ... -m ... [--syntax-only]
+syncmgr dry-run  -c ... -m ...
 ```
 
-## Native image (optional)
-
-```bash
-./gradlew :cli:nativeCompile
-```
-
-Use JVM (`runPipeline` / `installDist`) for production CDC. Native-image is mainly for lightweight `validate` / `status`.
-
-## Source prerequisites
-
-| Source | Requirements |
-|--------|----------------|
-| Oracle | Supplemental logging + LogMiner **or** XStream Out server |
-| Postgres | `wal_level=logical`, replication slot, `pgoutput` publication |
-| SQL Server | CDC enabled on database and each captured table |
-
-See `docs/` for more detail.
+See `docs/` for architecture and operations.

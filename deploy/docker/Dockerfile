@@ -10,9 +10,10 @@ FROM eclipse-temurin:17-jre
 WORKDIR /app
 RUN useradd -r -u 10001 syncmgr
 COPY --from=build /workspace/cli/build/install/syncmgr/ /app/
-RUN mkdir -p /data/offsets /data/schema-history /data/dlq && chown -R syncmgr:syncmgr /data /app
+RUN mkdir -p /data/offsets /data/schema-history /data/dlq /data/config \
+    && chown -R syncmgr:syncmgr /data /app
 USER syncmgr
 ENV JAVA_OPTS="-XX:+UseG1GC -XX:MaxRAMPercentage=75"
-EXPOSE 9404
+EXPOSE 9405
 ENTRYPOINT ["/app/bin/syncmgr"]
-CMD ["--help"]
+CMD ["run", "--bind", "0.0.0.0", "--port", "9405", "--config-dir", "/data/config"]
