@@ -1,0 +1,34 @@
+pipeline:
+  name: orders-mssql-to-cb
+
+source:
+  type: mssql
+  host: sql.internal
+  port: 1433
+  database: ShopDb
+  user: cdc_user
+  password: ${env:MSSQL_CDC_PASSWORD}
+  tables:
+    include:
+      - dbo.Orders
+      - dbo.OrderItems
+  snapshot:
+    mode: initial
+
+target:
+  type: couchbase
+  connectionString: couchbases://cb.internal
+  username: sync_svc
+  password: ${env:CB_PASSWORD}
+  bucket: orders
+
+offsets:
+  backend: file
+  path: /data/offsets
+
+metrics:
+  enabled: true
+  port: 9404
+
+deadLetter:
+  path: /data/dlq

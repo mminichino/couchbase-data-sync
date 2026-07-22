@@ -1,0 +1,26 @@
+mappings:
+  - source: public.orders
+    target:
+      scope: sales
+      collection: orders
+    key:
+      template: "order::{id}"
+    document:
+      fields:
+        - source: id
+          target: orderId
+        - source: status
+          target: status
+        - source: created_at
+          target: createdAt
+          type: iso8601
+    softDelete: true
+
+  - source: public.order_items
+    target:
+      scope: sales
+      # collection omitted → defaults to lowercase table name (order_items)
+      collection: order_items
+    key:
+      template: "orderitem::{order_id}::{id}"
+    softDelete: false

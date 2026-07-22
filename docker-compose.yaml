@@ -1,0 +1,119 @@
+# Quick-start stack: Postgres (logical replication) + Couchbase + syncmgr
+#
+#   export PG_CDC_PASSWORD=cdcsecret
+#   export CB_PASSWORD=password
+#   docker compose up -d
+#
+# Couchbase UI: http://localhost:8091  (Administrator / password)
+# Bootstrap creates the cluster + bucket `orders`.
+# syncmgr auto-creates scopes/collections from mapping.yaml on run.
+#
+# Validate / run via Gradle (preferred over native-image):
+#   ./gradlew :cli:validateConfig -Pconnection=examples/postgres-to-couchbase/connection.yaml \
+#       -Pmapping=examples/postgres-to-couchbase/mapping.yaml -PsyntaxOnly
+#   ./gradlew :cli:runPipeline -Pconnection=examples/postgres-to-couchbase/connection.compose.yaml \
+#       -Pmapping=examples/postgres-to-couchbase/mapping.yaml
+#
+# Or the containerized CLI:
+#   docker compose --profile tools run --rm syncmgr validate \
+#       -c /config/connection.compose.yaml -m /config/mapping.yaml --syntax-only
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: postgres
+    environment:
+      POSTGRES_DB: shop
+      POSTGRES_USER: cdc_user
+      POSTGRES_PASSWORD: ${PG_CDC_PASSWORD:-cdcsecret}
+    command:
+      - postgres
+      - -c
+      - wal_level=logical
+      - -c
+      - max_replication_slots=4
+      - -c
+      - max_wal_senders=4
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./deploy/docker/postgres-init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - sync-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cdc_user -d shop"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  couchbase:
+    image: couchbase/server:enterprise-8.0.2
+    container_name: couchbase
+    ports:
+      - "8091-8096:8091-8096"
+      - "11210:11210"
+    volumes:
+      - cbdata:/opt/couchbase/var
+    networks:
+      - sync-network
+
+  # Sidecar shares couchbase's network namespace (127.0.0.1 → Couchbase).
+  # Creates cluster + bucket only; scopes/collections are created by syncmgr.
+  bootstrap:
+    image: mminichino/cbsbootstrap:0.5.0
+    container_name: couchbase-bootstrap
+    network_mode: "service:couchbase"
+    environment:
+      - CBS_USERNAME=Administrator
+      - CBS_PASSWORD=${CB_PASSWORD:-password}
+      - CBS_NODES=127.0.0.1
+      - CBS_ALTERNATE_ADDRESS=localhost
+      - CBS_BUCKET=orders
+      - CBS_BUCKET_QUOTA=256
+      - CBS_BUCKET_REPLICAS=0
+    depends_on:
+      couchbase:
+        condition: service_started
+    restart: "no"
+
+  syncmgr:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile
+    container_name: syncmgr
+    depends_on:
+      postgres:
+        condition: service_healthy
+      bootstrap:
+        condition: service_completed_successfully
+    environment:
+      PG_CDC_PASSWORD: ${PG_CDC_PASSWORD:-cdcsecret}
+      CB_PASSWORD: ${CB_PASSWORD:-password}
+    volumes:
+      - ./examples/postgres-to-couchbase:/config:ro
+      - ./data/offsets:/data/offsets
+      - ./data/schema-history:/data/schema-history
+      - ./data/dlq:/data/dlq
+    ports:
+      - "9404:9404"
+    networks:
+      - sync-network
+    command:
+      - validate
+      - -c
+      - /config/connection.compose.yaml
+      - -m
+      - /config/mapping.yaml
+      - --syntax-only
+    profiles:
+      - tools
+
+networks:
+  sync-network:
+    name: sync-network
+    driver: bridge
+
+volumes:
+  pgdata:
+  cbdata:

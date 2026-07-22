@@ -1,0 +1,109 @@
+replicaCount: 1
+
+image:
+  repository: cdc-couchbase-sync
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+pipeline:
+  name: orders-postgres-to-cb
+
+# Mounted as ConfigMap (non-secret). Secrets via envFrom.
+connection:
+  pipeline:
+    name: orders-postgres-to-cb
+  source:
+    type: postgres
+    host: postgres.default.svc
+    port: 5432
+    database: shop
+    user: cdc_user
+    password: ${env:PG_CDC_PASSWORD}
+    tables:
+      include:
+        - public.orders
+    snapshot:
+      mode: initial
+    slotName: syncmgr_orders_slot
+    publicationName: syncmgr_orders_pub
+  target:
+    type: couchbase
+    connectionString: couchbase://couchbase.default.svc
+    username: sync_svc
+    password: ${env:CB_PASSWORD}
+    bucket: orders
+    durability: majority
+    kvTimeoutSeconds: 10
+    autoCreateKeyspaces: true
+    keyspaceReadyTimeoutSeconds: 60
+  offsets:
+    # Use couchbase (+ ha.enabled) for multi-replica; file is single-replica only
+    backend: file
+    path: /data/offsets
+    schemaHistoryPath: /data/schema-history/schemahistory.dat
+    # backend: couchbase
+    # couchbase:
+    #   useTarget: true
+    #   collection: cdc_state
+    # ha:
+    #   enabled: true
+    #   leaseTtlSeconds: 30
+    #   renewIntervalSeconds: 10
+  metrics:
+    enabled: true
+    port: 9404
+  deadLetter:
+    path: /data/dlq
+
+mapping:
+  mappings:
+    - source: public.orders
+      target:
+        scope: sales
+        collection: orders
+      key:
+        template: "order::{id}"
+      softDelete: true
+
+secrets:
+  # Existing secret with keys PG_CDC_PASSWORD and CB_PASSWORD
+  existingSecret: ""
+  # Or create one from these values (not recommended for production)
+  create: false
+  pgPassword: ""
+  cbPassword: ""
+
+persistence:
+  enabled: true
+  storageClass: ""
+  size: 5Gi
+  accessModes:
+    - ReadWriteOnce
+  # For multi-replica with offsets.backend=file you need ReadWriteMany + a shared FS.
+  # Prefer offsets.backend=couchbase (or kafka) + offsets.ha.enabled=true instead.
+
+service:
+  type: ClusterIP
+  metricsPort: 9404
+
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  labels: {}
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "2"
+    memory: 2Gi
+
+podSecurityContext:
+  fsGroup: 10001
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false

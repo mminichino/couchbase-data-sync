@@ -1,0 +1,25 @@
+mappings:
+  - source: dbo.Orders
+    target:
+      scope: sales
+      collection: orders
+    key:
+      template: "order::{OrderId}"
+    document:
+      fields:
+        - source: OrderId
+          target: orderId
+        - source: Status
+          target: status
+        - source: CreatedAt
+          target: createdAt
+          type: iso8601
+    softDelete: true
+
+  - source: dbo.OrderItems
+    target:
+      scope: sales
+      collection: order_items
+    key:
+      template: "orderitem::{OrderId}::{ItemId}"
+    softDelete: true

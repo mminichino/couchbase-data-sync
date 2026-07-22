@@ -1,0 +1,53 @@
+plugins {
+    id 'java'
+    id 'org.graalvm.buildtools.native' version '0.10.6' apply false
+}
+
+allprojects {
+    group = 'com.codelry.cdc'
+    version = '0.1.0-SNAPSHOT'
+
+    repositories {
+        mavenCentral()
+    }
+}
+
+subprojects {
+    apply plugin: 'java'
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(17)
+        }
+    }
+
+    tasks.withType(Test).configureEach {
+        useJUnitPlatform()
+    }
+}
+
+ext {
+    debeziumVersion = '3.0.8.Final'
+    couchbaseVersion = '3.7.9'
+    picocliVersion = '4.7.6'
+    snakeyamlVersion = '2.3'
+    jsonSchemaVersion = '1.5.4'
+    jacksonVersion = '2.18.2'
+    micrometerVersion = '1.14.2'
+    slf4jVersion = '2.0.16'
+    logbackVersion = '1.5.12'
+    junitVersion = '5.11.3'
+}
+
+// Convenience aliases from the root project
+tasks.register('runPipeline') {
+    group = 'application'
+    description = 'Alias for :cli:runPipeline (JVM). Pass -Pconnection= and -Pmapping='
+    dependsOn ':cli:runPipeline'
+}
+
+tasks.register('validateConfig') {
+    group = 'verification'
+    description = 'Alias for :cli:validateConfig. Pass -Pconnection= and -Pmapping='
+    dependsOn ':cli:validateConfig'
+}

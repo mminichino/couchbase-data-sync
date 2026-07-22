@@ -1,0 +1,47 @@
+# Multi-replica / HA example using Couchbase-backed offsets + leader election.
+# Only one replica runs Debezium; standbys wait on the lease and resume from shared offsets.
+pipeline:
+  name: orders-postgres-ha
+
+source:
+  type: postgres
+  host: postgres.default.svc
+  port: 5432
+  database: shop
+  user: cdc_user
+  password: ${env:PG_CDC_PASSWORD}
+  tables:
+    include:
+      - public.orders
+  snapshot:
+    mode: initial
+  slotName: syncmgr_orders_slot
+  publicationName: syncmgr_orders_pub
+
+target:
+  type: couchbase
+  connectionString: couchbase://couchbase.default.svc
+  username: sync_svc
+  password: ${env:CB_PASSWORD}
+  bucket: orders
+  durability: majority
+  kvTimeoutSeconds: 15
+
+offsets:
+  backend: couchbase
+  path: /data/offsets   # local status/STOP only
+  couchbase:
+    useTarget: true
+    scope: _default
+    collection: cdc_state
+  ha:
+    enabled: true
+    leaseTtlSeconds: 30
+    renewIntervalSeconds: 10
+
+metrics:
+  enabled: true
+  port: 9404
+
+deadLetter:
+  path: /data/dlq

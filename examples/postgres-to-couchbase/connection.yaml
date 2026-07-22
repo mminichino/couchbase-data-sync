@@ -1,0 +1,39 @@
+pipeline:
+  name: orders-postgres-to-cb
+
+source:
+  type: postgres
+  host: localhost
+  port: 5432
+  database: shop
+  user: cdc_user
+  password: ${env:PG_CDC_PASSWORD}
+  tables:
+    include:
+      - public.orders
+      - public.order_items
+  snapshot:
+    mode: initial
+  slotName: syncmgr_orders_slot
+  publicationName: syncmgr_orders_pub
+
+target:
+  type: couchbase
+  connectionString: couchbase://localhost
+  username: sync_svc
+  password: ${env:CB_PASSWORD}
+  bucket: orders
+  batchSize: 50
+  flushIntervalMs: 250
+
+offsets:
+  backend: file
+  path: ./data/offsets
+  schemaHistoryPath: ./data/schema-history/schemahistory.dat
+
+metrics:
+  enabled: true
+  port: 9404
+
+deadLetter:
+  path: ./data/dlq

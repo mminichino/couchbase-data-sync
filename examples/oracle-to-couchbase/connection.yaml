@@ -1,0 +1,44 @@
+pipeline:
+  name: orders-oracle-to-cb
+
+source:
+  type: oracle
+  host: db.internal
+  port: 1521
+  database: ORCL
+  pdb: ORCLPDB1
+  user: cdc_user
+  password: ${env:ORACLE_CDC_PASSWORD}
+  # logminer (default) | xstream — for XStream also set outServerName
+  connectionAdapter: logminer
+  # outServerName: dbzxout
+  tables:
+    include:
+      - SALES.ORDERS
+      - SALES.ORDER_ITEMS
+  snapshot:
+    mode: initial
+
+target:
+  type: couchbase
+  connectionString: couchbases://cb.internal
+  username: sync_svc
+  password: ${env:CB_PASSWORD}
+  bucket: orders
+  batchSize: 100
+  flushIntervalMs: 500
+  durability: majority
+  kvTimeoutSeconds: 10
+
+offsets:
+  backend: file
+  path: /data/offsets
+  schemaHistoryPath: /data/schema-history/schemahistory.dat
+
+metrics:
+  enabled: true
+  port: 9404
+  path: /metrics
+
+deadLetter:
+  path: /data/dlq

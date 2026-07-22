@@ -1,0 +1,38 @@
+mappings:
+  - source: SALES.ORDERS
+    target:
+      scope: sales
+      collection: orders
+    key:
+      template: "order::{ID}"
+    document:
+      fields:
+        - source: ID
+          target: orderId
+        - source: STATUS
+          target: status
+        - source: CREATED_AT
+          target: createdAt
+          type: iso8601
+      omit:
+        - INTERNAL_NOTES
+    softDelete: true
+
+  - source: SALES.ORDER_ITEMS
+    target:
+      scope: sales
+      collection: order_items
+    key:
+      template: "orderitem::{ORDER_ID}::{ID}"
+    document:
+      fields:
+        - source: ID
+          target: itemId
+        - source: ORDER_ID
+          target: orderId
+        - source: SKU
+          target: sku
+        - source: QTY
+          target: quantity
+          type: number
+    softDelete: true

@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://codelry.com/schemas/connection.schema.json",
+  "title": "CDC Connection Config",
+  "type": "object",
+  "required": ["pipeline", "source", "target", "offsets"],
+  "additionalProperties": false,
+  "properties": {
+    "pipeline": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 }
+      }
+    },
+    "source": {
+      "type": "object",
+      "required": ["type", "host", "port", "database", "user", "password", "tables"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "enum": ["oracle", "postgres", "mssql"] },
+        "host": { "type": "string", "minLength": 1 },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "database": { "type": "string", "minLength": 1 },
+        "user": { "type": "string", "minLength": 1 },
+        "password": { "type": "string", "minLength": 1 },
+        "pdb": { "type": "string" },
+        "connectionAdapter": { "type": "string", "enum": ["logminer", "xstream"] },
+        "outServerName": { "type": "string" },
+        "tables": {
+          "type": "object",
+          "required": ["include"],
+          "additionalProperties": false,
+          "properties": {
+            "include": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "exclude": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "snapshot": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": ["initial", "never", "initial_only", "when_needed", "no_data", "always"]
+            }
+          }
+        },
+        "slotName": { "type": "string" },
+        "publicationName": { "type": "string" },
+        "databaseServerId": { "type": "string" }
+      }
+    },
+    "target": {
+      "type": "object",
+      "required": ["type", "connectionString", "username", "password", "bucket"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "enum": ["couchbase"] },
+        "connectionString": { "type": "string", "minLength": 1 },
+        "username": { "type": "string", "minLength": 1 },
+        "password": { "type": "string", "minLength": 1 },
+        "bucket": { "type": "string", "minLength": 1 },
+        "batchSize": { "type": "integer", "minimum": 1 },
+        "flushIntervalMs": { "type": "integer", "minimum": 1 },
+        "durability": {
+          "type": "string",
+          "enum": ["none", "majority", "majorityAndPersistActive", "persistToMajority"]
+        },
+        "kvTimeoutSeconds": { "type": "integer", "minimum": 1 },
+        "autoCreateKeyspaces": { "type": "boolean" },
+        "keyspaceReadyTimeoutSeconds": { "type": "integer", "minimum": 5 }
+      }
+    },
+    "offsets": {
+      "type": "object",
+      "required": ["backend"],
+      "additionalProperties": false,
+      "properties": {
+        "backend": { "type": "string", "enum": ["file", "kafka", "couchbase"] },
+        "path": { "type": "string" },
+        "schemaHistoryPath": { "type": "string" },
+        "kafka": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "bootstrapServers": { "type": "string" },
+            "offsetTopic": { "type": "string" },
+            "schemaHistoryTopic": { "type": "string" },
+            "offsetPartitions": { "type": "integer", "minimum": 1 },
+            "offsetReplicationFactor": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "couchbase": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "useTarget": { "type": "boolean" },
+            "connectionString": { "type": "string" },
+            "username": { "type": "string" },
+            "password": { "type": "string" },
+            "bucket": { "type": "string" },
+            "scope": { "type": "string" },
+            "collection": { "type": "string" }
+          }
+        },
+        "ha": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "leaseTtlSeconds": { "type": "integer", "minimum": 5 },
+            "renewIntervalSeconds": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "path": { "type": "string" }
+      }
+    },
+    "deadLetter": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": { "type": "string" }
+      }
+    }
+  }
+}

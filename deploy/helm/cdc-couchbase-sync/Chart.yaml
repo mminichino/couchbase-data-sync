@@ -1,0 +1,6 @@
+apiVersion: v2
+name: cdc-couchbase-sync
+description: Debezium-embedded CDC sync from RDBMS to Couchbase
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
